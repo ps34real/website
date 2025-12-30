@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Unique Password Generator</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5.2.3/dist/lux/bootstrap.min.css">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+      .hero{min-height:100vh;display:flex;align-items:center;justify-content:center}
+      .pw-output{font-family:system-ui,monospace;font-size:1.05rem}
+    </style>
+  </head>
+  <body class="bg-light">
+    <main class="hero">
+      <div class="container" style="max-width:820px;">
+        <div class="card shadow">
+          <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <h4 class="mb-0">Unique Password Generator</h4>
+              <small class="text-muted">Generates a secure, unique password each time</small>
+            </div>
+
+            <div class="row">
+              <div class="col-md-7">
+                <div class="mb-3">
+                  <label class="form-label">Generated Password</label>
+                  <div class="input-group">
+                    <input id="generated" class="form-control pw-output" readonly placeholder="Click Generate">
+                    <button id="copyBtn" class="btn btn-outline-secondary">Copy</button>
+                  </div>
+                </div>
+
+                <div class="d-flex gap-2 mb-3">
+                  <button id="genBtn" class="btn btn-primary">Generate</button>
+                  <button id="regenBtn" class="btn btn-outline-primary">Regenerate</button>
+                  <button id="clearHist" class="btn btn-outline-danger">Clear History</button>
+                </div>
+
+                <div class="mb-2">
+                  <label class="form-label">Options</label>
+                  <div class="d-flex gap-2 align-items-center flex-wrap">
+                    <div class="input-group" style="max-width:120px;">
+                      <span class="input-group-text">Len</span>
+                      <input id="length" type="number" class="form-control" value="16" min="4" max="128">
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="lower" checked>
+                      <label class="form-check-label" for="lower">lower</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="upper" checked>
+                      <label class="form-check-label" for="upper">UPPER</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="numbers" checked>
+                      <label class="form-check-label" for="numbers">numbers</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="symbols">
+                      <label class="form-check-label" for="symbols">symbols</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mt-3">
+                  <small class="text-muted">Want it to "feel" AI-generated? Keep the options and length; each generation uses cryptographically secure randomness.</small>
+                </div>
+              </div>
+
+              <div class="col-md-5">
+                <div>
+                  <label class="form-label">Recent passwords</label>
+                  <ul id="history" class="list-group" style="max-height:360px; overflow:auto;"></ul>
+                </div>
+
+                <div class="mt-3">
+                  <label class="form-label">Actions</label>
+                  <div class="d-grid gap-2">
+                    <button id="downloadBtn" class="btn btn-outline-success">Download History</button>
+                    <button id="copyAllBtn" class="btn btn-outline-secondary">Copy All</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 text-muted small">
+              Note: This generator runs entirely in your browser; passwords are not sent to a server.
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      // Secure password generator using Web Crypto
+      function generatePassword(length, opts){
+        const lower = 'abcdefghijklmnopqrstuvwxyz';
+        const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const nums = '0123456789';
+        const syms = '!@#$%^&*()-_=+[]{}|;:,.<>?/~`';
+        let chars = '';
+        if(opts.lower) chars += lower;
+        if(opts.upper) chars += upper;
+        if(opts.numbers) chars += nums;
+        if(opts.symbols) chars += syms;
+        if(!chars) return '';
+        const arr = new Uint32Array(length);
+        window.crypto.getRandomValues(arr);
+        const res = Array.from(arr, (v)=> chars[v % chars.length]).join('');
+        return res;
+      }
+
+      function addHistory(pw){
+        if(!pw) return;
+        const key = 'pw_history_v1';
+        const raw = localStorage.getItem(key);
+        const list = raw ? JSON.parse(raw) : [];
+        list.unshift({pw: pw, created: new Date().toISOString()});
+        // keep last 50
+        if(list.length > 50) list.length = 50;
+        localStorage.setItem(key, JSON.stringify(list));
+        renderHistory();
+      }
+
+      function renderHistory(){
+        const key = 'pw_history_v1';
+        const raw = localStorage.getItem(key);
+        const list = raw ? JSON.parse(raw) : [];
+        const ul = document.getElementById('history');
+        ul.innerHTML = '';
+        list.forEach(item=>{
+          const li = document.createElement('li');
+          li.className = 'list-group-item d-flex justify-content-between align-items-center';
+          li.innerHTML = `<span class="me-2" style="word-break:break-all">${item.pw}</span><small class="text-muted ms-2">${new Date(item.created).toLocaleString()}</small>`;
+          ul.appendChild(li);
+        });
+      }
+
+      document.addEventListener('DOMContentLoaded', ()=>{
+        const out = document.getElementById('generated');
+        const gen = document.getElementById('genBtn');
+        const regen = document.getElementById('regenBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const length = document.getElementById('length');
+        const lower = document.getElementById('lower');
+        const upper = document.getElementById('upper');
+        const numbers = document.getElementById('numbers');
+        const symbols = document.getElementById('symbols');
+        const clearHist = document.getElementById('clearHist');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const copyAllBtn = document.getElementById('copyAllBtn');
+
+        function doGenerate(){
+          const opts = { lower: lower.checked, upper: upper.checked, numbers: numbers.checked, symbols: symbols.checked };
+          const len = Math.min(128, Math.max(4, parseInt(length.value)||16));
+          const pw = generatePassword(len, opts);
+          out.value = pw;
+          addHistory(pw);
+          return pw;
+        }
+
+        gen.addEventListener('click', ()=> doGenerate());
+        regen.addEventListener('click', ()=> doGenerate());
+
+        copyBtn.addEventListener('click', async ()=>{
+          if(!out.value) return;
+          try{ await navigator.clipboard.writeText(out.value); alert('Copied to clipboard'); }
+          catch(e){ alert('Copy failed'); }
+        });
+
+        clearHist.addEventListener('click', ()=>{
+          if(confirm('Clear saved password history?')){
+            localStorage.removeItem('pw_history_v1'); renderHistory();
+          }
+        });
+
+        downloadBtn.addEventListener('click', ()=>{
+          const raw = localStorage.getItem('pw_history_v1');
+          const blob = new Blob([raw||'[]'], {type:'application/json'});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = 'password-history.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+        });
+
+        copyAllBtn.addEventListener('click', async ()=>{
+          const raw = localStorage.getItem('pw_history_v1');
+          const list = raw ? JSON.parse(raw) : [];
+          const text = list.map(i=>i.pw).join('\n');
+          try{ await navigator.clipboard.writeText(text); alert('All passwords copied'); } catch(e){ alert('Copy failed'); }
+        });
+
+        renderHistory();
+      });
+    </script>
+  </body>
+</html>
+// ...existing code...
+  <head>
+    <!-- ...existing code... -->
+    <style>
+      :root{
+        --bg:#f8f9fa;
+        --card-bg:#ffffff;
+        --text:#212529;
+        --muted:#6c757d;
+        --input-bg:#fff;
+      }
+      /* Respect system preference */
+      @media (prefers-color-scheme: dark){
+        :root{
+          --bg:#121212;
+          --card-bg:#1e1e1e;
+          --text:#f1f1f1;
+          --muted:#bdbdbd;
+          --input-bg:#222;
+        }
+      }
+      /* explicit dark mode when class applied */
+      .dark-theme{
+        --bg:#121212;
+        --card-bg:#1e1e1e;
+        --text:#f1f1f1;
+        --muted:#bdbdbd;
+        --input-bg:#222;
+      }
+
+      body{ background-color:var(--bg); color:var(--text) }
+      .card{ background-color:var(--card-bg); color:var(--text) }
+      .text-muted{ color:var(--muted) !important }
+      .form-control, .form-control[readonly], .input-group-text {
+        background-color:var(--input-bg);
+        color:var(--text);
+        border-color: rgba(0,0,0,0.08);
+      }
+
+      .hero{min-height:100vh;display:flex;align-items:center;justify-content:center}
+      .pw-output{font-family:system-ui,monospace;font-size:1.05rem}
+    </style>
+    <!-- ...existing code... -->
+  </head>
+// ...existing code...
+          <div class="d-flex align-items-center justify-content-between mb-3">
+              <h4 class="mb-0">Unique Password Generator</h4>
+              <div class="d-flex align-items-center gap-2">
+                <small class="text-muted">Generates a secure, unique password each time</small>
+                <!-- THEME TOGGLE -->
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox" id="themeToggle">
+                  <label class="form-check-label" for="themeToggle">Dark</label>
+                </div>
+              </div>
+          </div>
+// ...existing code...
+    <script>
+      // ...existing code...
+
+      // --- THEME TOGGLE LOGIC ---
+      (function(){
+        const toggle = document.getElementById('themeToggle');
+        const storageKey = 'theme_pref'; // 'dark' | 'light' | null
+        function applyDark(dark){
+          document.documentElement.classList.toggle('dark-theme', dark);
+          toggle.checked = !!dark;
+        }
+        // initial: user choice -> system preference -> light
+        const saved = localStorage.getItem(storageKey);
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const isDark = saved ? saved === 'dark' : prefersDark;
+        applyDark(isDark);
+
+        toggle.addEventListener('change', ()=>{
+          const dark = toggle.checked;
+          applyDark(dark);
+          localStorage.setItem(storageKey, dark ? 'dark' : 'light');
+        });
+      })();
+
+      // ...existing code...
+    </script>
+// ...existing code...
